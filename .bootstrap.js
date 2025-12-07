@@ -78,7 +78,8 @@ function updateWranglerJsonc() {
 
 function runSetupCommands() {
     const commands = [
-    "bun add react-markdown@^8.0.7"
+    "bun add react-markdown@^8.0.7",
+    "bun install react-markdown@8.0.7"
 ];
     
     if (commands.length === 0) {
