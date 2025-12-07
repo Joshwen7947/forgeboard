@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { DemoItem, Board, Task, BoardSummary } from '@shared/types';
 import { MOCK_ITEMS, MOCK_BOARD } from '@shared/mock-data';
 import { v4 as uuidv4 } from 'uuid';
+import { createBoardSchema, createTaskSchema, updateTaskSchema, moveTaskSchema } from '@shared/schemas';
 // **DO NOT MODIFY THE CLASS NAME**
 export class GlobalDurableObject extends DurableObject {
     // --- Board Methods ---
@@ -15,7 +16,7 @@ export class GlobalDurableObject extends DurableObject {
             id: b.id,
             title: b.title,
             taskCount: b.tasks.length,
-            lastActivity: b.tasks[0]?.updatedAt || new Date().toISOString(),
+            lastActivity: b.tasks.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]?.updatedAt || new Date().toISOString(),
         }));
     }
     async getBoard(id: string): Promise<Board | undefined> {
@@ -26,17 +27,38 @@ export class GlobalDurableObject extends DurableObject {
         }
         return boards.find(b => b.id === id);
     }
+    async createBoard(input: { title: string }): Promise<Board> {
+        const validated = createBoardSchema.parse(input);
+        const newBoard: Board = {
+            id: `board-${uuidv4()}`,
+            title: validated.title,
+            columns: [
+                { id: 'col-1', title: 'Backlog', taskIds: [] },
+                { id: 'col-2', title: 'In Progress', taskIds: [] },
+                { id: 'col-3', title: 'In Review', taskIds: [] },
+                { id: 'col-4', title: 'Done', taskIds: [] },
+            ],
+            tasks: [],
+            users: MOCK_BOARD.users, // Seed with mock users/labels for demo
+            labels: MOCK_BOARD.labels,
+        };
+        let boards: Board[] = await this.ctx.storage.get("boards") || [];
+        boards.push(newBoard);
+        await this.ctx.storage.put("boards", boards);
+        return newBoard;
+    }
     async addTask(boardId: string, columnId: string, taskData: { title: string }): Promise<Board | undefined> {
+        const validated = createTaskSchema.parse({ title: taskData.title, columnId });
         let boards: Board[] = await this.ctx.storage.get("boards") || [];
         const boardIndex = boards.findIndex(b => b.id === boardId);
         if (boardIndex === -1) return undefined;
         const board = boards[boardIndex];
-        const column = board.columns.find(c => c.id === columnId);
+        const column = board.columns.find(c => c.id === validated.columnId);
         if (!column) return undefined;
         const newTask: Task = {
             id: `task-${uuidv4()}`,
-            title: taskData.title,
-            status: columnId,
+            title: validated.title,
+            status: validated.columnId,
             order: column.taskIds.length,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -47,37 +69,35 @@ export class GlobalDurableObject extends DurableObject {
         return board;
     }
     async updateTask(boardId: string, taskId: string, updates: Partial<Task>): Promise<Board | undefined> {
+        const validatedUpdates = updateTaskSchema.parse(updates);
         let boards: Board[] = await this.ctx.storage.get("boards") || [];
         const boardIndex = boards.findIndex(b => b.id === boardId);
         if (boardIndex === -1) return undefined;
         const board = boards[boardIndex];
         const taskIndex = board.tasks.findIndex(t => t.id === taskId);
         if (taskIndex === -1) return undefined;
-        board.tasks[taskIndex] = { ...board.tasks[taskIndex], ...updates, updatedAt: new Date().toISOString() };
+        board.tasks[taskIndex] = { ...board.tasks[taskIndex], ...validatedUpdates, updatedAt: new Date().toISOString() };
         await this.ctx.storage.put("boards", boards);
         return board;
     }
     async moveTask(boardId: string, taskId: string, fromColumnId: string, toColumnId: string, newIndex: number): Promise<Board | undefined> {
+        const validated = moveTaskSchema.parse({ taskId, fromColumnId, toColumnId, newIndex });
         let boards: Board[] = await this.ctx.storage.get("boards") || [];
         const boardIndex = boards.findIndex(b => b.id === boardId);
         if (boardIndex === -1) return undefined;
         const board = boards[boardIndex];
-        const task = board.tasks.find(t => t.id === taskId);
+        const task = board.tasks.find(t => t.id === validated.taskId);
         if (!task) return undefined;
-        const fromCol = board.columns.find(c => c.id === fromColumnId);
-        const toCol = board.columns.find(c => c.id === toColumnId);
+        const fromCol = board.columns.find(c => c.id === validated.fromColumnId);
+        const toCol = board.columns.find(c => c.id === validated.toColumnId);
         if (!fromCol || !toCol) return undefined;
-        // Remove from old column
-        const oldIndex = fromCol.taskIds.indexOf(taskId);
+        const oldIndex = fromCol.taskIds.indexOf(validated.taskId);
         if (oldIndex > -1) {
             fromCol.taskIds.splice(oldIndex, 1);
         }
-        // Add to new column
-        toCol.taskIds.splice(newIndex, 0, taskId);
-        // Update task status
-        task.status = toColumnId;
+        toCol.taskIds.splice(validated.newIndex, 0, validated.taskId);
+        task.status = validated.toColumnId;
         task.updatedAt = new Date().toISOString();
-        // Re-order tasks in the target column
         toCol.taskIds.forEach((tid, index) => {
             const t = board.tasks.find(t => t.id === tid);
             if (t) t.order = index;
@@ -92,9 +112,7 @@ export class GlobalDurableObject extends DurableObject {
         const board = boards[boardIndex];
         const task = board.tasks.find(t => t.id === taskId);
         if (!task) return undefined;
-        // Remove task from tasks array
         board.tasks = board.tasks.filter(t => t.id !== taskId);
-        // Remove taskId from its column
         const column = board.columns.find(c => c.id === task.status);
         if (column) {
             column.taskIds = column.taskIds.filter(id => id !== taskId);
