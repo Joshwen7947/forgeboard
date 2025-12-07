@@ -1,8 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DemoItem, Board, Task, BoardSummary } from '@shared/types';
+import type { DemoItem, Board, Task, BoardSummary, Presence, Label, UpdatedColumn, Comment } from '@shared/types';
 import { MOCK_ITEMS, MOCK_BOARD } from '@shared/mock-data';
 import { v4 as uuidv4 } from 'uuid';
-import { createBoardSchema, createTaskSchema, updateTaskSchema, moveTaskSchema } from '@shared/schemas';
+import { createBoardSchema, createTaskSchema, updateTaskSchema, moveTaskSchema, createCommentSchema } from '@shared/schemas';
 // **DO NOT MODIFY THE CLASS NAME**
 export class GlobalDurableObject extends DurableObject {
     // --- Board Methods ---
@@ -117,6 +117,59 @@ export class GlobalDurableObject extends DurableObject {
         if (column) {
             column.taskIds = column.taskIds.filter(id => id !== taskId);
         }
+        await this.ctx.storage.put("boards", boards);
+        return board;
+    }
+    async addComment(boardId: string, taskId: string, input: { content: string; authorId: string }): Promise<Board | undefined> {
+        createCommentSchema.parse(input);
+        let boards: Board[] = await this.ctx.storage.get("boards") || [];
+        const boardIndex = boards.findIndex(b => b.id === boardId);
+        if (boardIndex === -1) return undefined;
+        const board = boards[boardIndex];
+        const task = board.tasks.find(t => t.id === taskId);
+        if (!task) return undefined;
+        const newComment: Comment = {
+            id: `comment-${uuidv4()}`,
+            authorId: input.authorId,
+            content: input.content,
+            createdAt: new Date().toISOString(),
+        };
+        if (!task.comments) task.comments = [];
+        task.comments.push(newComment);
+        task.updatedAt = new Date().toISOString();
+        await this.ctx.storage.put("boards", boards);
+        return board;
+    }
+    async getPresence(boardId: string): Promise<Presence[]> {
+        const board = await this.getBoard(boardId);
+        if (!board) return [];
+        // Mock presence: some users are online
+        return board.users.map((user, index) => ({
+            userId: user.id,
+            isOnline: index % 2 === 0, // Mock every other user as online
+            lastSeen: new Date().toISOString(),
+        }));
+    }
+    async updateColumns(boardId: string, updates: UpdatedColumn[]): Promise<Board | undefined> {
+        let boards: Board[] = await this.ctx.storage.get("boards") || [];
+        const boardIndex = boards.findIndex(b => b.id === boardId);
+        if (boardIndex === -1) return undefined;
+        const board = boards[boardIndex];
+        updates.forEach(update => {
+            const columnIndex = board.columns.findIndex(c => c.id === update.id);
+            if (columnIndex > -1 && update.title) {
+                board.columns[columnIndex].title = update.title;
+            }
+        });
+        await this.ctx.storage.put("boards", boards);
+        return board;
+    }
+    async updateLabels(boardId: string, labels: Label[]): Promise<Board | undefined> {
+        let boards: Board[] = await this.ctx.storage.get("boards") || [];
+        const boardIndex = boards.findIndex(b => b.id === boardId);
+        if (boardIndex === -1) return undefined;
+        const board = boards[boardIndex];
+        board.labels = labels;
         await this.ctx.storage.put("boards", boards);
         return board;
     }

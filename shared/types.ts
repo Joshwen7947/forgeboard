@@ -8,6 +8,12 @@ export interface Label {
   name: string;
   color: string;
 }
+export interface Comment {
+  id: string;
+  authorId: string;
+  content: string;
+  createdAt: string;
+}
 export interface Task {
   id: string;
   title: string;
@@ -19,6 +25,7 @@ export interface Task {
   order: number;
   createdAt: string;
   updatedAt: string;
+  comments?: Comment[];
 }
 export interface Column {
   id: string;
@@ -38,6 +45,15 @@ export interface BoardSummary {
   title: string;
   taskCount: number;
   lastActivity: string;
+}
+export interface Presence {
+  userId: string;
+  isOnline: boolean;
+  lastSeen: string;
+}
+export interface UpdatedColumn {
+  id: string;
+  title?: string;
 }
 export interface ApiResponse<T = unknown> {
   success: boolean;

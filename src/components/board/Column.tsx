@@ -1,7 +1,8 @@
 import { SortableContext } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
-import { Plus, GripVertical } from 'lucide-react';
+import { Plus, GripVertical, CheckSquare } from 'lucide-react';
 import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TaskCard } from './TaskCard';
@@ -21,7 +22,7 @@ export function Column({ column, tasks, onAddTask, onTaskClick }: ColumnProps) {
   });
   return (
     <div ref={setNodeRef} className="w-80 flex-shrink-0 h-full flex flex-col">
-      <Card className={cn("flex-1 flex flex-col bg-muted/50 transition-colors", isOver && "bg-primary/10")}>
+      <Card className={cn("flex-1 flex flex-col bg-muted/50 transition-all duration-300", isOver && "bg-primary/10 ring-2 ring-primary/50")}>
         <CardHeader className="p-4 border-b flex-row justify-between items-center">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             {column.title}
@@ -41,11 +42,15 @@ export function Column({ column, tasks, onAddTask, onTaskClick }: ColumnProps) {
               ))}
             </SortableContext>
             {tasks.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground animate-fade-in p-4 text-center">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center justify-center h-32 text-muted-foreground p-4 text-center"
+              >
                 <CheckSquare className="h-8 w-8 mb-2 text-muted-foreground/50" />
                 <p className="text-sm font-medium">Empty column</p>
                 <p className="text-xs">Drag tasks here or add a new one.</p>
-              </div>
+              </motion.div>
             )}
           </div>
         </CardContent>

@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { Column } from './Column';
 import { TaskCard } from './TaskCard';
 import { TaskSheet } from './TaskSheet';
@@ -47,30 +48,29 @@ export function KanbanBoard({ board }: { board: Board }) {
   const sensors = useSensors(useSensor(PointerSensor, {
     activationConstraint: { distance: 10 },
   }));
-  const handleOptimisticUpdate = (updatedBoard: Board) => {
+  const handleOptimisticUpdate = useCallback((updatedBoard: Board) => {
       queryClient.setQueryData(['board', board.id], updatedBoard);
-  };
-  const mutationOptions = {
+  }, [queryClient, board.id]);
+  const mutationOptions = useMemo(() => ({
     onSuccess: (data: Board | undefined) => {
         if (data) {
             handleOptimisticUpdate(data);
         }
-        queryClient.invalidateQueries({ queryKey: ['board', board.id] });
     },
     onError: (err: Error) => {
         toast.error(err.message);
         queryClient.invalidateQueries({ queryKey: ['board', board.id] });
     },
-  };
+  }), [handleOptimisticUpdate, queryClient, board.id]);
   const moveTaskMutation = useMutation({ mutationFn: moveTaskApi, ...mutationOptions });
   const addTaskMutation = useMutation({ mutationFn: addTaskApi, ...mutationOptions });
   const deleteTaskMutation = useMutation({ mutationFn: deleteTaskApi, ...mutationOptions });
-  function onDragStart(event: DragStartEvent) {
+  const onDragStart = useCallback((event: DragStartEvent) => {
     if (event.active.data.current?.type === 'Task') {
       setActiveTask(event.active.data.current.task);
     }
-  }
-  function onDragEnd(event: DragEndEvent) {
+  }, []);
+  const onDragEnd = useCallback((event: DragEndEvent) => {
     setActiveTask(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -89,20 +89,19 @@ export function KanbanBoard({ board }: { board: Board }) {
         newIndex = toColumn.taskIds.length;
     }
     moveTaskMutation.mutate({ boardId: board.id, taskId, fromColumnId, toColumnId, newIndex });
-  }
-  const handleAddTask = (columnId: string) => {
+  }, [board.id, board.columns, moveTaskMutation]);
+  const handleAddTask = useCallback((columnId: string) => {
       addTaskMutation.mutate({ boardId: board.id, columnId, title: "New Task" }, {
           onSuccess: (data) => {
               if (data) {
-                  const newTask = data.tasks[data.tasks.length - 1];
-                  setSelectedTask(newTask);
+                  const newTask = data.tasks.find(t => !board.tasks.some(bt => bt.id === t.id));
+                  if (newTask) setSelectedTask(newTask);
                   handleOptimisticUpdate(data);
               }
-              queryClient.invalidateQueries({ queryKey: ['board', board.id] });
           }
       });
-  };
-  const handleDeleteTask = (taskId: string) => {
+  }, [addTaskMutation, board.id, board.tasks, handleOptimisticUpdate]);
+  const handleDeleteTask = useCallback((taskId: string) => {
       setSelectedTask(null);
       deleteTaskMutation.mutate({ boardId: board.id, taskId }, {
           onSuccess: (data) => {
@@ -110,7 +109,17 @@ export function KanbanBoard({ board }: { board: Board }) {
               toast.success("Task deleted");
           }
       });
-  };
+  }, [deleteTaskMutation, board.id, handleOptimisticUpdate]);
+  const onTaskClick = useCallback((task: Task) => {
+    setSelectedTask(task);
+  }, []);
+  useHotkeys('n', () => handleAddTask(board.columns[0].id), [board.columns, handleAddTask]);
+  useHotkeys('esc', () => setSelectedTask(null), []);
+  useHotkeys('delete', () => {
+    if (selectedTask) {
+      handleDeleteTask(selectedTask.id);
+    }
+  }, [selectedTask, handleDeleteTask]);
   return (
     <div className="p-4 sm:p-6 lg:p-8 h-full">
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
@@ -121,7 +130,7 @@ export function KanbanBoard({ board }: { board: Board }) {
                 key={col.id}
                 column={col}
                 tasks={col.taskIds.map((taskId) => tasks.find((task) => task.id === taskId)!).filter(Boolean)}
-                onTaskClick={setSelectedTask}
+                onTaskClick={onTaskClick}
                 onAddTask={() => handleAddTask(col.id)}
               />
             ))}
