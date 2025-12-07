@@ -4,7 +4,7 @@
  */
  {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "vite-cf-do-runner",
+	"name": "forgeboard-mi5s6wb-lj_vxbtflle9e",
 	"main": "worker/index.ts",
 	"compatibility_date": "2025-04-24",
 	"assets": {
