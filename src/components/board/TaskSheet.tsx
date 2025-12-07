@@ -21,7 +21,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import type { Board, Task, ApiResponse, Label } from '@shared/types';
+import { Label } from '@/components/ui/label';
+import type { Board, Task, ApiResponse, Label as LabelType } from '@shared/types';
 import { updateTaskSchema, createCommentSchema } from '@shared/schemas';
 interface TaskSheetProps {
   board: Board;
@@ -178,7 +179,7 @@ export function TaskSheet({ board, task, onClose, onDelete }: TaskSheetProps) {
                     return (
                       <motion.div key={comment.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                         <div className="flex items-start gap-3">
-                          <Avatar className="h-8 w-8"><AvatarImage src={author?.avatarUrl} /><AvatarFallback>{author?.name.charAt(0)}</AvatarFallback></Avatar>
+                          <Avatar className="h-8 w-8"><AvatarImage src={author?.avatarUrl} /><AvatarFallback>{author?.name?.charAt(0)}</AvatarFallback></Avatar>
                           <div>
                             <div className="flex items-center gap-2"><p className="font-semibold text-sm">{author?.name}</p><p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</p></div>
                             <div className="prose prose-sm dark:prose-invert max-w-none p-2 border rounded-md bg-muted/50 mt-1"><ReactMarkdown>{comment.content}</ReactMarkdown></div>
