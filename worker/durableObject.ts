@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DemoItem, Board, Task, BoardSummary, Presence, Label, UpdatedColumn, Comment } from '@shared/types';
+import type { DemoItem, Board, Task, BoardSummary, Presence, Label, UpdatedColumn, Comment, Column } from '@shared/types';
 import { MOCK_ITEMS, MOCK_BOARD } from '@shared/mock-data';
 import { v4 as uuidv4 } from 'uuid';
 import { createBoardSchema, createTaskSchema, updateTaskSchema, moveTaskSchema, createCommentSchema } from '@shared/schemas';
@@ -98,9 +98,11 @@ export class GlobalDurableObject extends DurableObject {
         toCol.taskIds.splice(validated.newIndex, 0, validated.taskId);
         task.status = validated.toColumnId;
         task.updatedAt = new Date().toISOString();
-        toCol.taskIds.forEach((tid, index) => {
-            const t = board.tasks.find(t => t.id === tid);
-            if (t) t.order = index;
+        board.columns.forEach(col => {
+            col.taskIds.forEach((tid, index) => {
+                const t = board.tasks.find(t => t.id === tid);
+                if (t) t.order = index;
+            });
         });
         await this.ctx.storage.put("boards", boards);
         return board;
@@ -150,16 +152,34 @@ export class GlobalDurableObject extends DurableObject {
             lastSeen: new Date().toISOString(),
         }));
     }
-    async updateColumns(boardId: string, updates: UpdatedColumn[]): Promise<Board | undefined> {
+    async updateColumns(boardId: string, newColumns: Column[]): Promise<Board | undefined> {
         let boards: Board[] = await this.ctx.storage.get("boards") || [];
         const boardIndex = boards.findIndex(b => b.id === boardId);
         if (boardIndex === -1) return undefined;
         const board = boards[boardIndex];
-        updates.forEach(update => {
-            const columnIndex = board.columns.findIndex(c => c.id === update.id);
-            if (columnIndex > -1 && update.title) {
-                board.columns[columnIndex].title = update.title;
+        const oldColumns = board.columns;
+        const newColumnIds = new Set(newColumns.map(c => c.id));
+        const removedColumns = oldColumns.filter(c => !newColumnIds.has(c.id));
+        if (removedColumns.length > 0 && board.columns.length > removedColumns.length) {
+            const backlogColumn = board.columns.find(c => !newColumnIds.has(c.id)) || board.columns[0];
+            if (backlogColumn) {
+                for (const removedCol of removedColumns) {
+                    for (const taskId of removedCol.taskIds) {
+                        const task = board.tasks.find(t => t.id === taskId);
+                        if (task) {
+                            task.status = backlogColumn.id;
+                            backlogColumn.taskIds.push(taskId);
+                        }
+                    }
+                }
             }
+        }
+        board.columns = newColumns;
+        board.columns.forEach(col => {
+            col.taskIds.forEach((tid, index) => {
+                const t = board.tasks.find(t => t.id === tid);
+                if (t) t.order = index;
+            });
         });
         await this.ctx.storage.put("boards", boards);
         return board;

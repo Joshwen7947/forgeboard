@@ -38,13 +38,28 @@ async function addTaskApi({ boardId, columnId, title }: { boardId: string; colum
     if (!data.success) throw new Error(data.error || 'API error adding task');
     return data.data;
 }
-export function KanbanBoard({ board }: { board: Board }) {
+interface KanbanBoardProps {
+    board: Board;
+    filters: {
+        search: string;
+        assignee?: string;
+        label?: string;
+    };
+}
+export function KanbanBoard({ board, filters }: KanbanBoardProps) {
   const queryClient = useQueryClient();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const columns = useMemo(() => board.columns, [board.columns]);
   const columnIds = useMemo(() => columns.map((col) => col.id), [columns]);
-  const tasks = useMemo(() => board.tasks, [board.tasks]);
+  const filteredTasks = useMemo(() => {
+    return board.tasks.filter(task => {
+        const searchMatch = filters.search ? task.title.toLowerCase().includes(filters.search.toLowerCase()) : true;
+        const assigneeMatch = filters.assignee ? task.assigneeId === filters.assignee : true;
+        const labelMatch = filters.label ? task.labelIds?.includes(filters.label) : true;
+        return searchMatch && assigneeMatch && labelMatch;
+    });
+  }, [board.tasks, filters]);
   const sensors = useSensors(useSensor(PointerSensor, {
     activationConstraint: { distance: 10 },
   }));
@@ -125,15 +140,20 @@ export function KanbanBoard({ board }: { board: Board }) {
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex gap-6 h-full items-start overflow-x-auto">
           <SortableContext items={columnIds}>
-            {columns.map((col) => (
-              <Column
-                key={col.id}
-                column={col}
-                tasks={col.taskIds.map((taskId) => tasks.find((task) => task.id === taskId)!).filter(Boolean)}
-                onTaskClick={onTaskClick}
-                onAddTask={() => handleAddTask(col.id)}
-              />
-            ))}
+            {columns.map((col) => {
+              const columnTasks = col.taskIds
+                .map((taskId) => filteredTasks.find((task) => task.id === taskId))
+                .filter((task): task is Task => !!task);
+              return (
+                <Column
+                  key={col.id}
+                  column={col}
+                  tasks={columnTasks}
+                  onTaskClick={onTaskClick}
+                  onAddTask={() => handleAddTask(col.id)}
+                />
+              );
+            })}
           </SortableContext>
         </div>
         {createPortal(
