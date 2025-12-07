@@ -4,7 +4,7 @@
 
 ForgeBoard is a developer-focused Kanban application built on Cloudflare Workers with Durable Objects for seamless persistence. It delivers a visually refined, minimalist interface optimized for clarity and velocity. Projects contain boards, boards contain columns (Backlog, In Progress, Review, Done) with draggable task cards, and tasks include title, description, assignee, labels, estimate, and status. The app emphasizes a polished single-page Board View experience alongside a Projects hub for managing multiple boards.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Joshwen7947/forgeboard)
 
 ## Features
 
@@ -146,7 +146,7 @@ Deploy to Cloudflare Workers for global, edge-distributed hosting with Durable O
 4. Custom Domain (Optional):
    - Add via Cloudflare Dashboard: Workers > Your Worker > Triggers > Custom Domains.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Joshwen7947/forgeboard)
 
 ### Production Notes
 
